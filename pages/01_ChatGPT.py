@@ -3,24 +3,27 @@ import yfinance as yf
 import pandas as pd
 import datetime
 
-st.set_page_config(page_title="📈 글로벌 주식 비교 분석", layout="wide")
+st.set_page_config(page_title="글로벌 주식 비교", layout="wide")
 
-st.title("📊 한국 🇰🇷 vs 미국 🇺🇸 주요 주식 수익률 비교")
-
-st.write("기간을 선택하면 주요 기업의 수익률과 차트를 비교할 수 있습니다.")
+st.title("📈 글로벌 주식 비교 분석")
+st.write("🇰🇷 한국 vs 🇺🇸 미국 주요 주식 수익률을 비교합니다.")
 
 # 기간 선택
-start_date = st.date_input(
-    "시작 날짜",
-    datetime.date.today() - datetime.timedelta(days=180)
-)
+col1, col2 = st.columns(2)
 
-end_date = st.date_input(
-    "종료 날짜",
-    datetime.date.today()
-)
+with col1:
+    start_date = st.date_input(
+        "시작 날짜",
+        datetime.date.today() - datetime.timedelta(days=180)
+    )
 
-# 주요 주식 리스트
+with col2:
+    end_date = st.date_input(
+        "종료 날짜",
+        datetime.date.today()
+    )
+
+# 주식 리스트
 stocks = {
     "삼성전자": "005930.KS",
     "SK하이닉스": "000660.KS",
@@ -34,22 +37,32 @@ stocks = {
     "구글": "GOOGL"
 }
 
-# 데이터 가져오기
-data = yf.download(list(stocks.values()), start=start_date, end=end_date)["Close"]
+tickers = list(stocks.values())
+
+# 데이터 다운로드
+data = yf.download(
+    tickers,
+    start=start_date,
+    end=end_date,
+    auto_adjust=True,
+    progress=False
+)
+
+# Close 데이터만 사용
+close = data["Close"]
 
 # 컬럼 이름 변경
-data.columns = stocks.keys()
+close.columns = stocks.keys()
 
 # 수익률 계산
-returns = (data.iloc[-1] / data.iloc[0] - 1) * 100
+returns = (close.iloc[-1] / close.iloc[0] - 1) * 100
 returns = returns.sort_values(ascending=False)
 
-# 수익률 테이블
-st.subheader("📊 수익률 비교 (%)")
+st.subheader("📊 기간 수익률 비교")
 
 returns_df = pd.DataFrame({
-    "Stock": returns.index,
-    "Return (%)": returns.values
+    "종목": returns.index,
+    "수익률 (%)": returns.values.round(2)
 })
 
 st.dataframe(returns_df, use_container_width=True)
@@ -64,10 +77,10 @@ selected = st.multiselect(
 )
 
 if selected:
-    st.line_chart(data[selected])
+    st.line_chart(close[selected])
 
-# 개별 종목 보기
-st.subheader("🔎 개별 종목 상세")
+# 개별 종목 분석
+st.subheader("🔎 개별 종목 분석")
 
 stock_choice = st.selectbox(
     "종목 선택",
@@ -75,13 +88,32 @@ stock_choice = st.selectbox(
 )
 
 ticker = stocks[stock_choice]
-hist = yf.download(ticker, start=start_date, end=end_date)
 
-st.line_chart(hist["Close"])
-
-st.metric(
-    label=f"{stock_choice} 총 수익률",
-    value=f"{((hist['Close'].iloc[-1]/hist['Close'].iloc[0]-1)*100):.2f}%"
+hist = yf.download(
+    ticker,
+    start=start_date,
+    end=end_date,
+    auto_adjust=True,
+    progress=False
 )
 
-st.success("🚀 yfinance 기반 글로벌 주식 비교 분석 앱")
+if not hist.empty:
+
+    st.line_chart(hist["Close"])
+
+    close_series = hist["Close"]
+
+    if isinstance(close_series, pd.DataFrame):
+        close_series = close_series.iloc[:, 0]
+
+    return_rate = (close_series.iloc[-1] / close_series.iloc[0] - 1) * 100
+
+    st.metric(
+        label=f"{stock_choice} 수익률",
+        value=f"{return_rate:.2f}%"
+    )
+
+else:
+    st.warning("주가 데이터를 불러오지 못했습니다.")
+
+st.success("🚀 yfinance 기반 글로벌 주식 분석 앱")
